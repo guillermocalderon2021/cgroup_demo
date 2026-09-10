@@ -69,7 +69,7 @@ exit
 
 ## 6. Experimento B: `memory.max`
 
-Este experimento estudia el límite duro y OOM. No se configura `MemoryHigh`, para evitar que el throttling del experimento anterior impida alcanzar el límite duro.
+Este experimento estudia el comportamiento de un cgroup cuando alcanza un límite duro de memoria. No se configura `MemoryHigh`, para evitar que el throttling y el reclaim asociados a ese umbral dificulten alcanzar `memory.max`.
 
 ```bash
 sudo systemd-run --scope \
@@ -85,13 +85,55 @@ Dentro de esa shell:
 ./collect_memory.sh 256 200
 ```
 
-Conservar `memory.max`, `memory.swap.max`, `memory.events` antes y después y la última cantidad impresa por `mem_work`. Interesan especialmente `max`, `oom` y `oom_kill`.
+El workload reserva y utiliza memoria en incrementos de 4 MiB. Como `MemoryMax=192M` limita al cgroup completo y no únicamente a `mem_work`, el proceso puede ser terminado antes de imprimir `allocated=192 MiB`.
 
-Salir con:
+Si aparece un mensaje similar a:
+
+```text
+allocated=188 MiB
+Terminado                 ./collect_memory.sh 256 200
+```
+
+**no salir todavía de la shell del cgroup**. El OOM killer puede terminar el script antes de que este alcance a imprimir el bloque `DESPUÉS`.
+
+Obtener inmediatamente la ruta del cgroup:
+
+```bash
+CG=/sys/fs/cgroup$(awk -F: '$1=="0" {print $3}' /proc/$$/cgroup)
+```
+
+y consultar la evidencia restante:
+
+```bash
+cat "$CG/memory.events"
+cat "$CG/memory.current"
+cat "$CG/memory.peak"
+```
+
+Para interpretar el resultado interesan especialmente los siguientes campos de `memory.events`:
+
+* `max`: número de veces que el cgroup intentó superar `memory.max`;
+* `oom`: situaciones de Out Of Memory producidas al alcanzar el límite;
+* `oom_kill`: procesos terminados por el OOM killer.
+
+`memory.peak` permite observar el mayor consumo de memoria alcanzado por el cgroup durante la ejecución.
+
+Un resultado con:
+
+```text
+max       > 0
+oom       > 0
+oom_kill  > 0
+```
+
+constituye evidencia de que el límite fue alcanzado y que el OOM killer terminó al menos un proceso del cgroup.
+
+Una vez registrada la evidencia, salir de la shell:
 
 ```bash
 exit
 ```
+
 
 ## 7. Relación entre PID y cgroup
 
