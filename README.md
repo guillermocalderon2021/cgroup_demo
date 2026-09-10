@@ -107,5 +107,3 @@ Para obtener la ruta absoluta:
 CG=/sys/fs/cgroup$(awk -F: '$1=="0" {print $3}' /proc/$$/cgroup)
 echo "$CG"
 ```
-
-Los valores experimentales deben registrarse desde la VM utilizada para la demostración y no sustituirse por valores inventados.
